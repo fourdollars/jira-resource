@@ -70,7 +70,7 @@ case "$0" in
     ('/opt/resource/check')
         [ -z "$debug" ] && echo "curl -fsSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
-        digest=$(jq -S -M < "$apijson" | sha256sum)
+        digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
 [
   {
@@ -84,7 +84,7 @@ ENDLINE
         [ -z "$debug" ] && echo "curl -fsSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
         cp -v "$apijson" "$1"/payload.json
-        digest=$(jq -S -M < "$apijson" | sha256sum)
+        digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
 {
   "version": {
@@ -107,5 +107,8 @@ ENDLINE
 esac
 
 echo "$json" > "$tmp"
+if [ -n "$debug" ]; then
+    cat "$tmp"
+fi
 sed -i 's/\t/ /g' "$tmp"
 jq -n --slurpfile all "$tmp" '$all[0]' >&3
