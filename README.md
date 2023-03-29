@@ -38,7 +38,7 @@ resource_types:
 ```yaml
 resources:
 - name: issue
-  icon: arrow-top-right
+  icon: jira
   type: jira
   check_every: 15m
   source:
@@ -47,7 +47,7 @@ resources:
     token: wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4
     resource: issue/JRA-9
 - name: search
-  icon: arrow-top-right
+  icon: jira
   type: jira
   check_every: 15m
   source:
