@@ -93,7 +93,7 @@ ENDLINE
   "metadata": [
     {
       "name": "resource",
-      "vaule": "$resource"
+      "value": "$resource"
     }
   ]
 }
