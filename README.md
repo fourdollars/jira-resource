@@ -37,8 +37,8 @@ resource_types:
 
 ```yaml
 resources:
-- name: jira-json
-  icon: arrows_more_up
+- name: issue
+  icon: arrow-top-right
   type: jira
   check_every: 5m
   source:
@@ -51,7 +51,7 @@ resources:
 ### get step
 
 ```yaml
-  - get: jira-json
+  - get: issue
 ```
 ```shell
 # It acts like the following commands.
@@ -65,7 +65,7 @@ $ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" https://jira.a
 jobs:
 - name: check-jira-issue
   plan:
-  - get: jira-json
+  - get: issue
   - task: check
     config:
       platform: linux
@@ -75,12 +75,12 @@ jobs:
           repository: alpine
           tag: latest
       inputs:
-        - name: jira-json
+        - name: issue
       run:
         path: sh
         args:
         - -exc
         - |
           apk add jq
-          jq -r .self < jira-json/payload.json
+          jq -r .self < issue/payload.json
 ```
