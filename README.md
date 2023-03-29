@@ -82,5 +82,5 @@ jobs:
         - -exc
         - |
           apk add jq
-          jq -r .< jira-json/payload.json
+          jq -r .self < jira-json/payload.json
 ```
