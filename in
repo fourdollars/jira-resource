@@ -1,0 +1,111 @@
+#!/bin/bash
+
+set -euo pipefail
+IFS=$'\n\t'
+
+clearup ()
+{
+    set +x
+    rm -f "$apijson"
+    rm -f "$tmp"
+}
+
+trap clearup EXIT INT TERM
+
+apijson=$(mktemp -u /tmp/json-XXXXXX)
+tmp=$(mktemp -u /tmp/json-XXXXXX)
+
+exec 3>&1
+exec 1>&2
+payload="$(cat <&0)"
+
+if [ "$(jq -r '.source | has("url")' <<< "$payload")" = 'true' ]; then
+    url="$(jq -r .source.url <<< "$payload")"
+else
+    echo 'You need to provide the url for Jira REST APIs.'
+    exit 1
+fi
+
+if [ "$(jq -r '.source | has("user")' <<< "$payload")" = 'true' ]; then
+    user="$(jq -r .source.user <<< "$payload")"
+else
+    echo 'You need to provide the user for Jira REST APIs.'
+    exit 1
+fi
+
+if [ "$(jq -r '.source | has("token")' <<< "$payload")" = 'true' ]; then
+    token="$(jq -r .source.token <<< "$payload")"
+else
+    echo 'You need to provide the token for Jira REST APIs.'
+    exit 1
+fi
+
+if [ "$(jq -r '.source | has("resource")' <<< "$payload")" = 'true' ]; then
+    resource="$(jq -r .source.resource <<< "$payload")"
+else
+    echo 'You need to provide the resource path for Jira REST APIs.'
+    exit 1
+fi
+
+if [ "$(jq -r '.source | has("debug")' <<< "$payload")" = 'true' ]; then
+    debug="$(jq -r .source.debug <<< "$payload")"
+else
+    debug=
+fi
+
+if [ -n "$debug" ] && [ "$debug" = "verbose" ]; then
+    set -x
+fi
+
+if [ -n "$debug" ]; then
+    printenv
+    [ "$(jq -r 'has("version")' <<< "$payload")" = 'true' ] && jq -r -S -C '.version' <<< "$payload"
+fi
+
+
+CURL=(curl --retry 3 --max-time 10 -fsSL --user "$user:$token")
+
+URL="$url$resource"
+case "$0" in
+    ('/opt/resource/check')
+        [ -z "$debug" ] && echo "curl -fsSL ${URL}"
+        "${CURL[@]}" "$URL" > "$apijson"
+        digest=$(jq -S -M < "$apijson" | sha256sum)
+        json=$(cat <<ENDLINE
+[
+  {
+    "digest": "sha256:${digest}"
+  }
+]
+ENDLINE
+)
+        ;;
+    ('/opt/resource/in')
+        [ -z "$debug" ] && echo "curl -fsSL ${URL}"
+        "${CURL[@]}" "$URL" > "$apijson"
+        cp -v "$apijson" "$1"/payload.json
+        digest=$(jq -S -M < "$apijson" | sha256sum)
+        json=$(cat <<ENDLINE
+{
+  "version": {
+    "digest": "sha256:${digest}"
+  },
+  "metadata": [
+    {
+      "name": "resource",
+      "vaule": "$resource
+    }
+  ]
+}
+ENDLINE
+)
+        ;;
+    ('/opt/resource/out')
+        cd "$1"
+        echo "TODO"
+        ;;
+esac
+
+echo "$json" > "$tmp"
+sed -i 's/\t/ /g' "$tmp"
+jq -n --slurpfile all "$tmp" '$all[0]' >&3
