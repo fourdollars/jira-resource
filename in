@@ -93,7 +93,7 @@ ENDLINE
   "metadata": [
     {
       "name": "resource",
-      "value": "$resource"
+      "value": "$(echo "$resource" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')"
     }
   ]
 }
