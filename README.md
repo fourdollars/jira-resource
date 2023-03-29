@@ -40,12 +40,21 @@ resources:
 - name: issue
   icon: arrow-top-right
   type: jira
-  check_every: 5m
+  check_every: 15m
   source:
     url: https://jira.atlassian.com/rest/api/latest/
     user: username
     token: wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4
     resource: issue/JRA-9
+- name: search
+  icon: arrow-top-right
+  type: jira
+  check_every: 15m
+  source:
+    url: https://jira.atlassian.com/rest/api/latest/
+    user: username
+    token: wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4
+    resource: "search?jql=project=DEVOPS%20AND%20labels%20IN%20(\"Concourse-CI\")&maxResults=50"
 ```
 
 ### get step
@@ -66,6 +75,7 @@ jobs:
 - name: check-jira-issue
   plan:
   - get: issue
+    trigger: true
   - task: check
     config:
       platform: linux
@@ -81,6 +91,27 @@ jobs:
         args:
         - -exc
         - |
-          apk add jq
+          apk add --quiet --no-progress jq
           jq -r .self < issue/payload.json
+- name: check-jira-search
+  plan:
+  - get: search
+    trigger: true
+  - task: check
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: alpine
+          tag: latest
+      inputs:
+        - name: search
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          apk add --quiet --no-progress jq
+          jq -r ".issues | .[] | .self, .key, .fields.summary" < search/payload.json
 ```
