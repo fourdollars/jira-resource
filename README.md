@@ -56,11 +56,23 @@ resources:
     token: wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4
     resource: "search?jql=project=DEVOPS%20AND%20labels%20IN%20(\"Concourse-CI\")&maxResults=50"
 ```
+### check step
+
+```yaml
+  - get: issue
+    trigger: true
+```
+```shell
+# It acts like the following commands.
+$ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
+$ digest="sha256:$(jq -S -M < payload.json | sha256sum | awk '{print $1}')"
+```
 
 ### get step
 
 ```yaml
   - get: issue
+    trigger: true
 ```
 ```shell
 # It acts like the following commands.
