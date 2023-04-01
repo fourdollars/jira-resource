@@ -116,10 +116,31 @@ jobs:
         - |
           apk add --quiet --no-progress jq
           jq -r .self < issue/payload.json
+- name: check-jira-search
+  plan:
+  - get: search
+    trigger: true
+  - task: check
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: alpine
+          tag: latest
+      inputs:
+        - name: search
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          apk add --quiet --no-progress jq
+          jq -r ".issues | .[] | .self, .key, .fields.summary" < search/payload.json
 - name: comment-on-jira-issue
   plan:
   - get: issue
-  - task: check
+  - task: comment
     config:
       platform: linux
       image_resource:
@@ -142,38 +163,17 @@ jobs:
           cat > output/data.json <<ENDLINE
           {
             "update": {
-               "comment": [
-                  {
-                     "add": {
-                        "body": "The self link of this issue is $SELF."
-                     }
+              "comment": [
+                {
+                  "add": {
+                    "body": "The self link of this issue is $SELF."
                   }
-               ]
+                }
+              ]
             }
           }
           ENDLINE
   - put: issue
     params:
       json: output/data.json
-- name: check-jira-search
-  plan:
-  - get: search
-    trigger: true
-  - task: check
-    config:
-      platform: linux
-      image_resource:
-        type: registry-image
-        source:
-          repository: alpine
-          tag: latest
-      inputs:
-        - name: search
-      run:
-        path: sh
-        args:
-        - -exc
-        - |
-          apk add --quiet --no-progress jq
-          jq -r ".issues | .[] | .self, .key, .fields.summary" < search/payload.json
 ```
