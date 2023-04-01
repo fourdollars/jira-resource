@@ -63,12 +63,12 @@ if [ -n "$debug" ]; then
 fi
 
 
-CURL=(curl --retry 3 --max-time 10 -fsSL --user "$user:$token")
+CURL=(curl --retry 3 --max-time 10 -fSL --user "$user:$token")
 
 URL="$url$resource"
 case "$0" in
     ('/opt/resource/check')
-        [ -z "$debug" ] && echo "curl -fsSL ${URL}"
+        [ -z "$debug" ] && echo "curl -fSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
         digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
@@ -81,9 +81,9 @@ ENDLINE
 )
         ;;
     ('/opt/resource/in')
-        [ -z "$debug" ] && echo "curl -fsSL ${URL}"
+        [ -z "$debug" ] && echo "curl -fSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
-        cp -v "$apijson" "$1"/payload.json
+        cp "$apijson" "$1"/payload.json
         digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
 {
@@ -101,14 +101,69 @@ ENDLINE
 )
         ;;
     ('/opt/resource/out')
+        if [ "$(jq -r '.params | has("json")' <<< "$payload")" = 'false' ]; then
+            echo 'You need to provide the json param in the put step.'
+            exit 1
+        fi
         cd "$1"
-        echo "TODO"
+        DATA=$(jq -r '.params.json' <<< "$payload")
+        if [ -f "$DATA" ]; then
+            if ! jq -r -S -C < "$DATA"; then
+                echo "The json param doesn't contain the valid json content or the existing file path."
+                exit 1
+            fi
+            DATA="@$DATA"
+        else
+            if ! jq -r -S -C <<< "$DATA"; then
+                echo "The json param doesn't contain the valid json content or the existing file path."
+                if [ -n "$debug" ]; then
+                    echo "$DATA"
+                fi
+                exit 1
+            fi
+        fi
+        if [[ "$resource" =~ [0-9]+$ ]]; then
+            METHOD=(-X PUT)
+        else
+            METHOD=(-X POST)
+        fi
+        [ -z "$debug" ] && echo "curl -fSL ${METHOD[*]} --data \"$DATA\" -H \"Content-Type: application/json\" ${URL}"
+        "${CURL[@]}" "${METHOD[@]}" --data "$DATA" -H "Content-Type: application/json" "$URL" > "$apijson"
+        if [ -s "$apijson" ] && [ -n "$debug" ] && [ "$debug" = "verbose" ]; then
+            jq -r -S -C < "$apijson"
+        fi
+        if [[ "$resource" =~ [0-9]+$ ]]; then
+            [ -z "$debug" ] && echo "curl -fSL ${URL}"
+            "${CURL[@]}" "$URL" > "$apijson"
+            if [ -n "$debug" ] && [ "$debug" = "verbose" ]; then
+                jq -r -S -C < "$apijson"
+            fi
+        fi
+        digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
+        json=$(cat <<ENDLINE
+{
+  "version": {
+    "digest": "sha256:${digest}"
+  },
+  "metadata": [
+    {
+      "name": "resource",
+      "value": "$(echo "$resource" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')"
+    }
+  ]
+}
+ENDLINE
+)
         ;;
 esac
 
 echo "$json" > "$tmp"
 if [ -n "$debug" ]; then
-    cat "$tmp"
+    if jq -S -M < "$tmp" > /dev/null; then
+        jq -r -S -C < "$tmp"
+    else
+        cat "$tmp"
+    fi
 fi
 sed -i 's/\t/ /g' "$tmp"
 jq -n --slurpfile all "$tmp" '$all[0]' >&3

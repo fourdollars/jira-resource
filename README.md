@@ -80,6 +80,19 @@ $ cd /tmp/build/get
 $ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
 ```
 
+### put step
+
+```yaml
+  - put: issue
+    params:
+      json: output/data.json
+```
+```shell
+# It acts like the following commands.
+$ cd /tmp/build/put
+$ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" -X PUT --data @output/data.json -H "Content-Type: application/json" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
+```
+
 ### Job Example
 
 ```yaml
