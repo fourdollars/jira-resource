@@ -1,5 +1,3 @@
-*WIP*
-
  [![GitHub: fourdollars/jira-resource](https://img.shields.io/badge/GitHub-fourdollars%2Fjira%E2%80%90resource-darkgreen.svg)](https://github.com/fourdollars/jira-resource/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Bash](https://img.shields.io/badge/Language-Bash-red.svg)](https://www.gnu.org/software/bash/) ![Docker](https://github.com/fourdollars/jira-resource/workflows/Docker/badge.svg) [![Docker Pulls](https://img.shields.io/docker/pulls/fourdollars/jira-resource.svg)](https://hub.docker.com/r/fourdollars/jira-resource/)
 # jira-resource
 [Concourse CI](https://concourse-ci.org/)'s Jira resource to interact with [Jira REST APIs](https://developer.atlassian.com/server/jira/platform/rest-apis/).
@@ -44,7 +42,7 @@ resources:
   source:
     url: https://jira.atlassian.com/rest/api/latest/
     user: username
-    token: wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4
+    token: password
     resource: issue/JRA-9
 - name: search
   icon: jira
@@ -53,7 +51,7 @@ resources:
   source:
     url: https://jira.atlassian.com/rest/api/latest/
     user: username
-    token: wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4
+    token: password
     resource: "search?jql=project=DEVOPS%20AND%20labels%20IN%20(\"Concourse-CI\")&maxResults=50"
 ```
 ### check step
@@ -64,7 +62,7 @@ resources:
 ```
 ```shell
 # It acts like the following commands.
-$ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
+$ curl -fsSL --user "username:password" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
 $ digest="sha256:$(jq -S -M < payload.json | sha256sum | awk '{print $1}')"
 ```
 
@@ -77,7 +75,7 @@ $ digest="sha256:$(jq -S -M < payload.json | sha256sum | awk '{print $1}')"
 ```shell
 # It acts like the following commands.
 $ cd /tmp/build/get
-$ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
+$ curl -fsSL --user "username:password" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
 ```
 
 ### put step
@@ -90,7 +88,7 @@ $ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" https://jira.a
 ```shell
 # It acts like the following commands.
 $ cd /tmp/build/put
-$ curl -fsSL --user "username:wxdnqsclxzrmhb2k27frgjc7hdp3zqk0b4" -X PUT --data @output/data.json -H "Content-Type: application/json" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
+$ curl -fsSL --user "username:password" -X PUT --data @output/data.json -H "Content-Type: application/json" https://jira.atlassian.com/rest/api/latest/issue/JRA-9 > payload.json
 ```
 
 ### Job Example
@@ -118,6 +116,45 @@ jobs:
         - |
           apk add --quiet --no-progress jq
           jq -r .self < issue/payload.json
+- name: comment-on-jira-issue
+  plan:
+  - get: issue
+  - task: check
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: alpine
+          tag: latest
+      inputs:
+        - name: issue
+      outputs:
+        - name: output
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          apk add --quiet --no-progress jq
+          SELF=$(jq -r .self < issue/payload.json)
+          mkdir -p output
+          cat > output/data.json <<ENDLINE
+          {
+            "update": {
+               "comment": [
+                  {
+                     "add": {
+                        "body": "The self link of this issue is $SELF."
+                     }
+                  }
+               ]
+            }
+          }
+          ENDLINE
+  - put: issue
+    params:
+      json: output/data.json
 - name: check-jira-search
   plan:
   - get: search
