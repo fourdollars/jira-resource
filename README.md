@@ -1,6 +1,6 @@
  [![GitHub: fourdollars/jira-resource](https://img.shields.io/badge/GitHub-fourdollars%2Fjira%E2%80%90resource-darkgreen.svg)](https://github.com/fourdollars/jira-resource/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Bash](https://img.shields.io/badge/Language-Bash-red.svg)](https://www.gnu.org/software/bash/) ![Docker](https://github.com/fourdollars/jira-resource/workflows/Docker/badge.svg) [![Docker Pulls](https://img.shields.io/docker/pulls/fourdollars/jira-resource.svg)](https://hub.docker.com/r/fourdollars/jira-resource/)
 # jira-resource
-[Concourse CI](https://concourse-ci.org/)'s Jira resource to interact with [Jira REST APIs](https://developer.atlassian.com/server/jira/platform/rest-apis/).
+[Concourse CI](https://concourse-ci.org/)'s Jira resource to interact with [Jira REST APIs](https://developer.atlassian.com/server/jira/platform/jira-rest-api-examples/).
 
 ## Config
 
