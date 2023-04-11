@@ -7,13 +7,13 @@ clearup ()
 {
     set +x
     rm -f "$apijson"
-    rm -f "$tmp"
+    rm -f "$tmpjson"
 }
 
 trap clearup EXIT INT TERM
 
 apijson=$(mktemp -u /tmp/json-XXXXXX)
-tmp=$(mktemp -u /tmp/json-XXXXXX)
+tmpjson=$(mktemp -u /tmp/json-XXXXXX)
 
 exec 3>&1
 exec 1>&2
@@ -47,6 +47,8 @@ else
     exit 1
 fi
 
+fetch="$(jq -r '.source.fetch // ""' <<< "$payload")"
+
 if [ "$(jq -r '.source | has("debug")' <<< "$payload")" = 'true' ]; then
     debug="$(jq -r .source.debug <<< "$payload")"
 else
@@ -70,6 +72,22 @@ case "$0" in
     ('/opt/resource/check')
         [ -z "$debug" ] && echo "curl -fSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
+        if [ -n "$fetch" ] && [ "$(jq -r 'has("startAt")' < "$apijson")" = "true" ] && [ "$(jq -r 'has("total")' < "$apijson")" = "true" ] && [ "$(jq -r "has(\"$fetch\")" < "$apijson")" = "true" ]; then
+            startAt="$(jq -r '.startAt' < "$apijson")"
+            maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
+            total="$(jq -r '.total' < "$apijson")"
+            next=$((startAt+maxResults))
+            while [ "$next" -lt "$total" ]; do
+                mv "$apijson" "$tmpjson"
+                "${CURL[@]}" "$URL&startAt=$next" > "$apijson"
+                jq --slurpfile prev "$tmpjson" ".$fetch += \$prev[].$fetch" "$apijson" > tmp.json
+                mv tmp.json "$apijson"
+                startAt="$(jq -r '.startAt' < "$apijson")"
+                maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
+                total="$(jq -r '.total' < "$apijson")"
+                next=$((startAt+maxResults))
+            done
+        fi
         digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
 [
@@ -83,6 +101,22 @@ ENDLINE
     ('/opt/resource/in')
         [ -z "$debug" ] && echo "curl -fSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
+        if [ -n "$fetch" ] && [ "$(jq -r 'has("startAt")' < "$apijson")" = "true" ] && [ "$(jq -r 'has("total")' < "$apijson")" = "true" ] && [ "$(jq -r "has(\"$fetch\")" < "$apijson")" = "true" ]; then
+            startAt="$(jq -r '.startAt' < "$apijson")"
+            maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
+            total="$(jq -r '.total' < "$apijson")"
+            next=$((startAt+maxResults))
+            while [ "$next" -lt "$total" ]; do
+                mv "$apijson" "$tmpjson"
+                "${CURL[@]}" "$URL&startAt=$next" > "$apijson"
+                jq --slurpfile prev "$tmpjson" ".$fetch += \$prev[].$fetch" "$apijson" > tmp.json
+                mv tmp.json "$apijson"
+                startAt="$(jq -r '.startAt' < "$apijson")"
+                maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
+                total="$(jq -r '.total' < "$apijson")"
+                next=$((startAt+maxResults))
+            done
+        fi
         cp "$apijson" "$1"/payload.json
         digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
@@ -157,13 +191,13 @@ ENDLINE
         ;;
 esac
 
-echo "$json" > "$tmp"
+echo "$json" > "$tmpjson"
 if [ -n "$debug" ]; then
-    if jq -S -M < "$tmp" > /dev/null; then
-        jq -r -S -C < "$tmp"
+    if jq -S -M < "$tmpjson" > /dev/null; then
+        jq -r -S -C < "$tmpjson"
     else
-        cat "$tmp"
+        cat "$tmpjson"
     fi
 fi
-sed -i 's/\t/ /g' "$tmp"
-jq -n --slurpfile all "$tmp" '$all[0]' >&3
+sed -i 's/\t/ /g' "$tmpjson"
+jq -n --slurpfile all "$tmpjson" '$all[0]' >&3
