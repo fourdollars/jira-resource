@@ -44,7 +44,7 @@ resources:
     user: username
     token: password
     resource: issue/JRA-9
-- name: search
+- name: search-by-label
   icon: jira
   type: jira
   check_every: 15m
@@ -53,6 +53,25 @@ resources:
     user: username
     token: password
     resource: "search?jql=project=DEVOPS%20AND%20labels%20IN%20(\"Concourse-CI\")&maxResults=50"
+- name: search-by-label
+  icon: jira
+  type: jira
+  check_every: 15m
+  source:
+    url: https://jira.atlassian.com/rest/api/latest/
+    user: username
+    token: password
+    resource: "search?jql=project=DEVOPS%20AND%20labels%20IN%20(\"Concourse-CI\")&maxResults=50"
+- name: all-issues
+  icon: jira
+  type: jira
+  check_every: 15m
+  source:
+    url: https://jira.atlassian.com/rest/api/latest/
+    user: username
+    token: password
+    fetch: issues
+    resource: "search?jql=project=DEVOPS"
 ```
 ### check step
 
@@ -118,7 +137,7 @@ jobs:
           jq -r .self < issue/payload.json
 - name: check-jira-search
   plan:
-  - get: search
+  - get: search-by-label
     trigger: true
   - task: check
     config:
@@ -129,14 +148,35 @@ jobs:
           repository: alpine
           tag: latest
       inputs:
-        - name: search
+        - name: search-by-label
       run:
         path: sh
         args:
         - -exc
         - |
           apk add --quiet --no-progress jq
-          jq -r ".issues | .[] | .self, .key, .fields.summary" < search/payload.json
+          jq -r ".issues | .[] | .self, .key, .fields.summary" < search-by-label/payload.json
+- name: check-all-issues
+  plan:
+  - get: all-issues
+    trigger: true
+  - task: check
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: alpine
+          tag: latest
+      inputs:
+        - name: all-issues
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          apk add --quiet --no-progress jq
+          jq -r ".issues | .[] | .self, .key, .fields.summary" < all-issues/payload.json
 - name: comment-on-jira-issue
   plan:
   - get: issue
