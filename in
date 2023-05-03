@@ -72,6 +72,10 @@ case "$0" in
     ('/opt/resource/check')
         [ -z "$debug" ] && echo "curl -fSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
+        if [[ "$resource" =~ ^search.* ]] && [ "$(jq -r .total < "$apijson")" = "0" ]; then
+            jq -S -M < "$apijson"
+            exit 1
+        fi
         if [ -n "$fetch" ] && [ "$(jq -r 'has("startAt")' < "$apijson")" = "true" ] && [ "$(jq -r 'has("total")' < "$apijson")" = "true" ] && [ "$(jq -r "has(\"$fetch\")" < "$apijson")" = "true" ]; then
             startAt="$(jq -r '.startAt' < "$apijson")"
             maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
@@ -101,6 +105,10 @@ ENDLINE
     ('/opt/resource/in')
         [ -z "$debug" ] && echo "curl -fSL ${URL}"
         "${CURL[@]}" "$URL" > "$apijson"
+        if [[ "$resource" =~ ^search.* ]] && [ "$(jq -r .total < "$apijson")" = "0" ]; then
+            jq -S -M < "$apijson"
+            exit 1
+        fi
         if [ -n "$fetch" ] && [ "$(jq -r 'has("startAt")' < "$apijson")" = "true" ] && [ "$(jq -r 'has("total")' < "$apijson")" = "true" ] && [ "$(jq -r "has(\"$fetch\")" < "$apijson")" = "true" ]; then
             startAt="$(jq -r '.startAt' < "$apijson")"
             maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
