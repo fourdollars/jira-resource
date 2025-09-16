@@ -64,26 +64,42 @@ if [ -n "$debug" ]; then
     [ "$(jq -r 'has("version")' <<< "$payload")" = 'true' ] && jq -r -S -C '.version' <<< "$payload"
 fi
 
+fetch_with_pagination() {
+    [ -z "$debug" ] && echo "curl -fSL ${URL}"
+    "${CURL[@]}" "$URL" > "$apijson"
 
-CURL=(curl --retry 3 --max-time 10 -fSL --user "$user:$token")
+    if [[ "$resource" =~ ^search.* ]] && [ "$(jq -r .total < "$apijson")" = "0" ]; then
+        jq -S -M < "$apijson"
+        exit 1
+    fi
 
-URL="$url$resource"
-case "$0" in
-    ('/opt/resource/check')
-        [ -z "$debug" ] && echo "curl -fSL ${URL}"
-        "${CURL[@]}" "$URL" > "$apijson"
-        if [[ "$resource" =~ ^search.* ]] && [ "$(jq -r .total < "$apijson")" = "0" ]; then
-            jq -S -M < "$apijson"
-            exit 1
-        fi
-        if [ -n "$fetch" ] && [ "$(jq -r 'has("startAt")' < "$apijson")" = "true" ] && [ "$(jq -r 'has("total")' < "$apijson")" = "true" ] && [ "$(jq -r "has(\"$fetch\")" < "$apijson")" = "true" ]; then
+    if [ -n "$fetch" ] && [ "$(jq -r "has(\"$fetch\")" < "$apijson")" = "true" ]; then
+        # Check for nextPageToken pagination (newer Jira API style)
+        if [ "$(jq -r 'has("nextPageToken")' < "$apijson")" = "true" ] && [ "$(jq -r '.isLast' < "$apijson")" = "false" ]; then
+            while [ "$(jq -r '.isLast' < "$apijson")" = "false" ]; do
+                nextPageToken="$(jq -r '.nextPageToken' < "$apijson")"
+                mv "$apijson" "$tmpjson"
+                if [[ "$URL" == *"?"* ]]; then
+                    "${CURL[@]}" "$URL&nextPageToken=$nextPageToken" > "$apijson"
+                else
+                    "${CURL[@]}" "$URL?nextPageToken=$nextPageToken" > "$apijson"
+                fi
+                jq --slurpfile prev "$tmpjson" ".$fetch += \$prev[].$fetch" "$apijson" > tmp.json
+                mv tmp.json "$apijson"
+            done
+        # Check for traditional startAt/maxResults pagination
+        elif [ "$(jq -r 'has("startAt")' < "$apijson")" = "true" ] && [ "$(jq -r 'has("total")' < "$apijson")" = "true" ]; then
             startAt="$(jq -r '.startAt' < "$apijson")"
             maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
             total="$(jq -r '.total' < "$apijson")"
             next=$((startAt+maxResults))
             while [ "$next" -lt "$total" ]; do
                 mv "$apijson" "$tmpjson"
-                "${CURL[@]}" "$URL&startAt=$next" > "$apijson"
+                if [[ "$URL" == *"?"* ]]; then
+                    "${CURL[@]}" "$URL&startAt=$next" > "$apijson"
+                else
+                    "${CURL[@]}" "$URL?startAt=$next" > "$apijson"
+                fi
                 jq --slurpfile prev "$tmpjson" ".$fetch += \$prev[].$fetch" "$apijson" > tmp.json
                 mv tmp.json "$apijson"
                 startAt="$(jq -r '.startAt' < "$apijson")"
@@ -92,6 +108,16 @@ case "$0" in
                 next=$((startAt+maxResults))
             done
         fi
+    fi
+}
+
+CURL=(curl --retry 3 --max-time 10 -fSL --user "$user:$token")
+
+URL="$url$resource"
+
+case "$0" in
+    ('/opt/resource/check')
+        fetch_with_pagination
         digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
 [
@@ -103,28 +129,7 @@ ENDLINE
 )
         ;;
     ('/opt/resource/in')
-        [ -z "$debug" ] && echo "curl -fSL ${URL}"
-        "${CURL[@]}" "$URL" > "$apijson"
-        if [[ "$resource" =~ ^search.* ]] && [ "$(jq -r .total < "$apijson")" = "0" ]; then
-            jq -S -M < "$apijson"
-            exit 1
-        fi
-        if [ -n "$fetch" ] && [ "$(jq -r 'has("startAt")' < "$apijson")" = "true" ] && [ "$(jq -r 'has("total")' < "$apijson")" = "true" ] && [ "$(jq -r "has(\"$fetch\")" < "$apijson")" = "true" ]; then
-            startAt="$(jq -r '.startAt' < "$apijson")"
-            maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
-            total="$(jq -r '.total' < "$apijson")"
-            next=$((startAt+maxResults))
-            while [ "$next" -lt "$total" ]; do
-                mv "$apijson" "$tmpjson"
-                "${CURL[@]}" "$URL&startAt=$next" > "$apijson"
-                jq --slurpfile prev "$tmpjson" ".$fetch += \$prev[].$fetch" "$apijson" > tmp.json
-                mv tmp.json "$apijson"
-                startAt="$(jq -r '.startAt' < "$apijson")"
-                maxResults="$(jq -r '.maxResults // 50' < "$apijson")"
-                total="$(jq -r '.total' < "$apijson")"
-                next=$((startAt+maxResults))
-            done
-        fi
+        fetch_with_pagination
         cp "$apijson" "$1"/payload.json
         digest=$(jq -S -M < "$apijson" | sha256sum | awk '{print $1}')
         json=$(cat <<ENDLINE
